@@ -1,0 +1,24 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class BUKPayOrderServiceInterceptor
+{
+	@ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em;
+
+	@After(pattern='CashReceiptService.post', eval="#{result.formno=='51' && result.collectiontype.handler=='payorder'}")
+	public void postItems(ei){
+		def receipt=ei.result;
+		em.closePayorder([receiptid:receipt.objid, receiptno:receipt.receiptno, receiptdate:receipt.receiptdate, payorderid:receipt.payorder.objid, username:receipt.collector.name]);
+	}
+
+	@After(pattern='CashReceiptVoidService.post')
+	public void postVoidItems(eia){
+		def voidreceipt = eia.result;
+		em.closePayorderVoid([receiptid:voidreceipt.receiptid])
+
+	}
+
+
+}

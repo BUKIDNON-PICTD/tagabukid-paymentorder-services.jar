@@ -1,0 +1,63 @@
+import com.rameses.annotations.*;
+import com.rameses.util.*;
+import java.rmi.server.*;
+import com.rameses.common.*
+import com.rameses.services.extended.*
+
+class SGKindLookupService  {
+
+	@ActiveDB(value='sgkind', em='plugtreasury')
+	def em;
+
+	@ActiveDB(value='permittees', em='plugtreasury')
+	def xem;
+
+	@Env
+	def env;
+
+	def entity;
+
+	def sgk;
+
+	@ProxyMethod
+	public def getColumns( def o ) {
+		return[
+			[name:'name', caption:'Name', width:200, resizable:false ],
+			[name:'code', caption:'Code' ],
+		];
+	}
+	
+	@ProxyMethod
+	public def getList( Map m ) {
+		if(m.searchtext == null ) m.searchtext = "";
+		m.name = m.searchtext.trim() + "%";
+		m.code = m.searchtext.trim() + "%";
+		m._pagingKeys = "r.objid";
+		m._limit = 50;
+		def permittee = xem.getPermittee(m.entity.payer)[0]
+
+		if(xem.getPermitteePayorder([permobjid:permittee.objid])){
+			 sgk = xem.getSGKByCommoditys(permittee);
+		}
+		else{
+			 sgk = xem.getSGKByCommoditysNewPermittee(permittee);
+		}
+
+		m.filter = "AND r.objid IN ('" + sgk.objid.join("','") + "')"
+
+		println "test" * 100
+		println m
+
+		println "test" * 100
+		println permittee
+
+		println "test" * 100
+		println permittee.objid
+
+		println "test" * 100
+		println sgk
+		
+		//return sgk
+		return em.getLookup(m);	
+	} 
+}

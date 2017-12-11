@@ -1,0 +1,26 @@
+<schema>
+	<element name="permittee" tablename="permittee">
+		<field name="objid" primary="true"/>
+		<field name="entobjid" />
+		<field name="permitteename" />
+		<field name="location" />
+	</element>
+	<element name="permitteecommodity" tablename="permittee_commodity1">
+		<field name="objid" primary="true"/>
+		<field name="permobjid" />
+		<field name="permitno" />
+		<field name="status" />
+		<field name="startdate" />
+		<field name="enddate" />
+		<field name="eccallowed" />
+	</element>
+	<element name="commoditykinds" tablename="commodity">
+		<field name="objid" primary="true"/>
+		<field name="commodityname" />
+		<field name="commoditycode" />
+	</element>
+	<element name="permitteecommodityitem" tablename="permittee_commodity_item">
+		<field name="objid" primary="true"/>
+		<field name="commodityid" primary="true"/>
+	</element>
+</schema>

@@ -1,0 +1,36 @@
+import com.rameses.annotations.*;
+import com.rameses.util.*;
+import java.rmi.server.*;
+import com.rameses.common.*
+import com.rameses.services.extended.*
+
+class commodityLookupService  {
+
+	@ActiveDB(value='permittee', em='plugtreasury')
+	def em;
+
+	@Env
+	def env;
+
+	@ProxyMethod
+	public def getColumns( def o ) {
+		return[
+			[name:'commodityname', caption:'Name', width:200, resizable:false ],
+			[name:'commoditycode', caption:'Code' ],
+		];
+	}
+	
+	@ProxyMethod
+	public def getList( Map m ) {
+		if(m.searchtext == null ) m.searchtext = "";
+		m.commodityname = m.searchtext.trim() + "%";
+		m.commoditycode = m.searchtext.trim() + "%";
+		m._pagingKeys = "r.objid";
+		m._limit = 50;
+
+		m.filter = ''
+		
+		
+		return em.getLookup(m);	
+	} 
+}

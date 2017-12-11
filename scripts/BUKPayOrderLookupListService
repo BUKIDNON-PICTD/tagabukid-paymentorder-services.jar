@@ -1,0 +1,41 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class BUKPayOrderLookupListService
+{
+	@ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em;
+
+
+	@ProxyMethod
+	public def getColumns(params){
+		return [
+			[name:'paidby', caption:'Payee'],
+			[name:'paidbyaddress', caption:'Address'],
+			[name:'amountdue', caption:'Amount Due'],
+			[name:'state', caption:'State'],
+			[name:'ordernum', caption:'Order #'],
+		]
+	}
+
+	@ProxyMethod
+	public def getList(params){
+		if (params.searchtext == null) {
+			params.searchtext = '';
+		}
+		params.searchtext += '%';
+		return em.getLookupList(params)
+	}
+	
+
+	public void afterOpen(payorder){
+		payorder.items = getItems(payorder)
+	}
+
+	@ProxyMethod
+	public def getItems(payorder){
+		return em.getPayorderitems(payorder);
+	}
+
+}

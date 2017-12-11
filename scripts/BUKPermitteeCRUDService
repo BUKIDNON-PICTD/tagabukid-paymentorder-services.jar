@@ -1,0 +1,153 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class BUKPermitteeCRUDService extends ActiveCrudListService
+{
+	@ActiveDB(value='permittees', em='plugtreasury')
+	def em;
+
+	@ProxyMethod
+	public def getColumns(params){
+		return [
+			[name:'permitteename', caption:'Permittee'],
+			[name:'location', caption:'Location'],
+			[name:'permitno', caption:'Permit Number'],
+			[name:'startdate', caption:'Start Date'],
+			[name:'enddate', caption:'End Date'],
+			[name:'status', caption:'Remarks'],
+			[name:'eccallowed', caption:'ECC Allowed Cubic'],
+			[name:'totalqty', caption:'Total Qty Bought'],
+
+		]
+	}
+
+	void afterList(params,o){
+		o.each{
+			try{
+				it.totalqty = em.findTotalQty([objid:it.permitobjid]).totalqty
+			}
+			catch(e){
+				it.totalqty = 0;
+			}
+
+		}
+
+
+	}
+
+
+	@ProxyMethod
+	public def permitteeTotalQuantity(o){
+
+		def permobjid
+		def totalquantity
+		def balance
+		def ecc
+
+		println o
+
+		if(em.getPermitteePayorder([permobjid:o])){
+			println "test" * 100
+			permobjid = em.findPermittee([permobjid:o])
+			totalquantity = toDecimal(em.findTotalQty(permobjid).totalqty)
+			ecc = toDecimal(em.findEccAllowed(permobjid).eccallowed)
+			balance = ecc - totalquantity 
+			println permobjid
+			println totalquantity
+			println ecc
+			println balance
+			return balance
+			
+		}
+		else{
+			println "mike" * 100
+			totalquantity = 99999
+			return totalquantity
+		}
+	}
+
+	public void afterOpen(permittee){
+		permittee.permits = em.getPermits([objid:permittee.objid])
+		permittee.permits.each{
+			it.commoditys = em.getCommoditys([objid:it.objid])
+		}
+		
+	}
+
+	void afterCreate(permittee){
+		saveCommoditys(permittee);
+	}
+
+	void afterUpdate(permittee){
+		saveCommoditys(permittee);
+	}
+
+	void saveCommoditys(permittee){
+		//permittee.commoditys.each{			/*loop ni, equivalent sa for loop */
+		//	em.save(it, 'commodity');
+		//}
+
+		permittee.permits.each{permit ->
+			em.save(permit,'permitteecommodity')
+
+			//em.deleteitems ([objid: permit.objid])
+
+			permit.commoditys.each{item->
+				item.objid = permit.objid
+				em.save(item,'permitteecommodityitem')
+				//println item
+			}
+
+			//permit.commoditys.each{
+			//	it.objid = permit.objid
+			//	em.save(it,'permitteecommodityitem')
+			//	println it
+			//}
+		}
+
+		
+	}
+
+	void beforeRemoveCommodity(permittee){
+		em.deleteAllCommodity(permittee);
+	}
+
+	@ProxyMethod
+	public void deleteCommodity(permittee){
+		em.delete(commodity, 'commodity')
+	}
+
+
+	@ProxyMethod
+	public def getReportData(personnel){
+		personnel = open(personnel)
+
+		//perform complex operations or processing
+
+		personnel.name = personnel.lastname + ', '
+		personnel.name += personnel.firstname
+
+		if (personnel.middlename)
+			personnel.name += ' ' + personnel.middlename
+
+		//done
+
+		return personnel
+	}
+
+	def toDecimal(paramvalue){
+		if (paramvalue == null) 
+			return 0.00
+
+		try{
+			return new java.math.BigDecimal(paramvalue.toString())
+		}
+		catch(e){
+			return 0.00 
+		}
+	}
+
+	
+
+}

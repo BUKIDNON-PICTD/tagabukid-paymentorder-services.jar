@@ -1,0 +1,17 @@
+<schema>
+	<element name="sgkind" tablename="sgkind">
+		<field name="objid" primary="true"/>
+		<field name="name" required="true"/>
+		<field name="code" />
+		<field name="commodityid" />
+	</element>
+	<element name="sgkindaccount" tablename="sgkind_itemaccount">
+		<field name="objid" primary="true"/>
+		<field name="sgobjid" />
+		<field name="item_objid" />
+		<field name="orseq" />
+		<field name="txntype" />
+		<field name="unittype" />
+		<field name="unit" />
+	</element>
+</schema>

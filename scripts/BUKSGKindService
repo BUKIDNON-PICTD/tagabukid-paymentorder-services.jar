@@ -1,0 +1,34 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class BUKSGKindService extends ActiveCrudListService
+{
+	@ActiveDB(value='sgkind', em='plugtreasury')
+	def em;
+
+	/* ===================save items services kunohay=========================== */
+
+	void saveSGKinditems(sgkind){
+		sgkind.sgkindaccounts.each{			/*loop ni, equivalent sa for loop */
+			em.save(it, 'sgkindaccount');
+		}
+	}
+
+
+	/* public void afterOpen(payorder){
+		payorder.items = getItems(payorder)
+	}
+
+	void beforeCreate(payorder){
+		payorder.ordernum = seqSvc.getNextFormattedSeries('payorder') ; 
+	}*/
+
+	void afterCreate(entity){
+		saveSGKinditems(entity);
+	}
+
+	void afterUpdate(entity){
+		saveSGKinditems(entity);
+	}
+}

@@ -1,0 +1,44 @@
+<schema>
+	<element name="bukpayorder" tablename="payorder">
+		<field name="objid" primary="true"/>
+		<field name="permobjid"/>
+		<field name="ordernum"/>
+		<field name="paidby" required="true"/>
+		<field name="paidbyaddress" required="true"/>
+		<field name="amountdue"/>
+		<field name="username" />
+		<field name="receiptid"/>
+		<field name="receiptno"/>
+		<field name="receiptdate"/>
+		<field name="state"/>
+		<field name="office"/>
+		<field name="txndate"/>
+		<field name="expdate"/>
+		<field name="assessedby"/>
+		<field name="assessedbyname"/>
+		<field name="ordertype"/>
+	</element>
+	<element name="item" tablename="payorderitem">
+		<field name="objid" primary="true"/>
+		<field name="payorderid" required="true"/>
+		<field name="item_objid" />
+		<field name="item_title" />
+		<field name="item_code" />
+		<field name="type" />
+		<field name="valuetype" />
+		<field name="defaultvalue"/>
+		<field name="item_fund_objid" />
+		<field name="item_fund_title" />
+		<field name="item_fund_code" />
+		<field name="amount" required="true"/>
+		<field name="remarks" />
+		<field name="couponno" />
+		<field name="sgquantity" />
+	</element>
+	
+</schema>
+
+
+	
+
+

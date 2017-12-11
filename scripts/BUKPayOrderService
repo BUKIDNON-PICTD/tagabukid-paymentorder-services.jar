@@ -1,0 +1,278 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class BUKPayOrderService extends ActiveCrudListService
+{
+	@ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em;
+
+	@ActiveDB('bukpayorder')
+	def xem;
+
+	@ActiveDB(value='bukpayorder',em='main')
+	def emmain 
+
+	@Service('SequenceService')
+	def seqSvc
+
+	@Service('ReportParameterService')
+	def rpsvc
+
+	@Service('DateService')
+	def dtSvc
+
+	@Service('BUKPermitteeCRUDService')
+	def bukpermsvc
+
+	@Env
+	def env; 
+
+	@ProxyMethod
+	public def getColumns(params){
+		return [
+			[name:'paidby', caption:'Payee'],
+			[name:'paidbyaddress', caption:'Address'],
+			[name:'amountdue', caption:'Amount Due'],
+			[name:'state', caption:'State'],
+			[name:'txndate', caption:'Date'],
+			[name:'ordernum', caption:'Order #'],
+			[name:'receiptno', caption:'OR No.'],
+		]
+	}
+
+
+	void savePayorderitems(payorder){
+		payorder.items.each{			/*loop ni, equivalent sa for loop */
+			em.save(it, 'item');
+		}
+	}
+
+
+	public void afterOpen(payorder){
+		println payorder
+		payorder.items = getItems(payorder)
+	}
+
+	void beforeCreate(payorder){
+		payorder.txndate = dtSvc.serverDate
+		payorder.expdate = dtSvc.serverDate + 1
+		payorder.ordernum = dtSvc.getServerYear() +"-"+ seqSvc.getNextFormattedSeries('payorder' + dtSvc.getServerYear()) ;
+		payorder.assessedby = env.USERID
+		payorder.assessedbyname = env.FULLNAME
+	}
+
+	void afterCreate(payorder){
+		savePayorderitems(payorder);
+	}
+
+	void afterUpdate(payorder){
+		savePayorderitems(payorder);
+	}
+
+	void afterList(params,o){
+		//println "TEST"
+		def filter = "receiptid IN ('" + o.receiptid.join("','") + "')";
+		def voidedReceipt = emmain.getVoidedReceipt([filter:filter])
+		//println voidedReceipt
+		voidedReceipt.each{ y ->
+			o.find{ it.receiptid == y.receiptid }.state = "VOIDED"
+		}
+		//o.find{it.expdate < dtSvc.serverDate || state == "DRAFT"}.state = "EXPIRED"
+	}
+
+	@ProxyMethod
+	public def getItems(payorder){
+		return em.getPayorderitems(payorder);
+	}
+
+	@ProxyMethod
+	public def getSGAdminList(params){
+		if (params.searchtext == null) {
+			params.searchtext = '';
+		}
+		params.searchtext += '%';
+		return em.getSGAdminList(params);
+	}
+
+	@ProxyMethod
+	public def addCouponValidation(entity){
+		println "=" *50
+		println entity
+		
+		
+		if (em.getCouponno(entity)){
+			return false;
+		}
+		else{
+			em.updateCoupon(entity)
+		}
+		return true;
+		
+	}
+
+	@ProxyMethod
+	public def getReportData(payorder){
+		payorder = open(payorder)
+		payorder.churvaness = em.getPayorderitemsx(payorder)
+		payorder.params = rpsvc.getStandardParameter()
+		println payorder.params
+		//perform complex operations or processing
+
+		//payorder.name = payorder.lastname + ', '
+		//payorder.name += payorder.firstname
+
+		//if (personnel.middlename)
+			//personnel.name += ' ' + personnel.middlename
+
+		//done
+
+		//entity.name = entity.paidby
+
+		return payorder
+	}
+
+	@ProxyMethod
+	public def getOreReportData(payorder){
+		payorder = open(payorder)
+		payorder.churvaness = em.getOrePayorderitemsx(payorder)
+		payorder.params = rpsvc.getStandardParameter()
+		println payorder.churvaness
+		
+		return payorder
+	}
+
+	
+	void saveSgkinds(test){
+		println test
+	}
+
+
+// =========   Sand and Gravel Assessment Support  =========================
+	@ProxyMethod
+	public def generateAssessment(entity){
+		entity.objid = 'PO' + new java.rmi.server.UID()
+		entity.office = "ADMIN"
+		println entity
+		println "test" * 50
+		println entity.items.qty
+		def balance
+		entity.items.each{
+			balance = (bukpermsvc.permitteeTotalQuantity(entity.permobjid))
+			if (it.qty > balance) throw new Exception ('I see what you did there')
+		}
+
+		//if(entity.items.qty > qtybalance())
+		return createPaymentOrder(entity,null)
+	}
+
+	def qtybalance(entity){
+       return bukpermsvc.permitteeTotalQuantity(entity.permobjid);
+    }
+
+	@ProxyMethod
+	public def submitAssessmentForPayment(entity){
+	
+		def count = getPaymentOrderCounts(entity.items);
+		def paymentorders = []
+		count.each{
+			entity.objid = 'PO' + new java.rmi.server.UID()
+			//entity.office = "ADMIN"
+			//println createPaymentOrder(entity,it.orseq)
+			//savePayorderitems(createPaymentOrder(entity,it.orseq));
+			def payorder = createPaymentOrder(entity,it.orseq)
+			beforeCreate(payorder)
+			em.create(payorder, 'bukpayorder');
+			afterCreate(payorder)
+			paymentorders.push(payorder)
+		}
+		paymentorders.each{
+			it.churvaness = em.getPayorderitemsx(it)
+			it.params = rpsvc.getStandardParameter()
+		}
+		
+		return paymentorders;
+	
+	}
+
+	def getPaymentOrderCounts(items){
+		def filter = "('" + items.objid.join("','") + "')"
+		return em.getSGKindAccountorseq([filter:filter]);
+	}
+
+	def createPaymentOrder(entity,orseq){
+		def paymentorderitems = []
+		entity.items.each{sgkind ->
+			def sgkindaccount;
+			if (orseq){
+				sgkind.orseq = orseq
+				sgkindaccount = em.getSGKindAccount(sgkind);
+			}else{
+				sgkindaccount = em.getSGKindAccountAll(sgkind);
+			}
+			
+			if(sgkindaccount){
+					sgkindaccount.each{it ->
+						def itemaccount = xem.getItemAccount(it.item)[0]
+						def paymentorderitem = [
+							objid: 'PI' + new java.rmi.server.UID(),
+							payorderid : entity.objid,
+							item_objid : itemaccount.objid,
+							item_title : itemaccount.title,
+							item_code : itemaccount.code,
+							type : itemaccount.type,
+							valuetype : itemaccount.valuetype,
+							defaultvalue : itemaccount.defaultvalue,
+							item_fund_objid : itemaccount.fund.objid,
+							item_fund_title : itemaccount.fund.title,
+							item_fund_code : itemaccount.fund.code,
+							amount : toDecimal(itemaccount.defaultvalue) * toDecimal(sgkind.qty),
+							remarks: (it.hascoupon == 1? "qty@" + sgkind.qty + " " + "DR#" + " " + sgkind.couponno:0),
+							sgquantity : sgkind.qty,
+							couponno : (it.hascoupon == 1?sgkind.couponno:0),
+						]
+						paymentorderitems.push(paymentorderitem)
+
+				
+					}
+				
+			}
+		}
+		
+		//println paymentorderitems
+		def paymentorder = [
+			objid : entity.objid,
+			ordernum : null,
+			permobjid : entity.permobjid,
+			paidby : entity.paidby,
+			paidbyaddress : entity.paidbyaddress,
+			amountdue : paymentorderitems.amount.sum(),
+			items : paymentorderitems,
+			office: entity.office,
+			state : 'DRAFT',
+			ordertype : 'SG'
+
+		]
+
+
+		return paymentorder
+	}
+
+	def toDecimal(paramvalue){
+		if (paramvalue == null) 
+			return 0.0
+
+		try{
+			return new java.math.BigDecimal(paramvalue.toString())
+		}
+		catch(e){
+			return 0.0 
+		}
+	}
+
+	def saveTransaction(payorder){
+		return null;
+	}
+
+	
+}

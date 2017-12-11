@@ -1,0 +1,138 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*
+import com.rameses.services.extended.*
+import com.rameses.util.*
+
+
+class BUKHousingReportService 
+{ 
+	@ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em
+
+	@ActiveDB(value='bukpayorder',em='main')
+	def emmain 
+
+	@Env
+	def env 
+ 
+	@Service('DateService')
+	def dtSvc
+
+	@Service('ReportParameterService')
+	def reportSvc
+
+
+	@ProxyMethod 
+	def generateHousingReport( params) {
+		buildParams( params ); 
+		def data = [:]	
+
+		data.rptdata = em.getHousingReport(params)
+
+		def filter = "receiptid IN ('" + data.rptdata.receiptid.join("','") + "')";
+		def voidedReceipt = emmain.getVoidedReceipt([filter:filter])
+		println voidedReceipt
+		voidedReceipt.each{ y ->
+			def voided = data.rptdata.find{ it.receiptid == y.receiptid }
+			data.rptdata.remove(voided)
+		}
+
+		if( ! data.rptdata ) throw new Exception("No record(s) found ");
+		data.rptdata.each{
+			it.housingitems = em.getHousingReportItem([objid:it.objid])  
+		}
+
+		data.info = [
+			PREPAREDBY 		: env.FULLNAME,
+			PREPAREDBYTITLE : env.JOBTITLE, 
+			PERIOD			: params.strperiod,
+			TITLE 			: 'REPORT BY CASH RECEIPT',
+		]
+		return data;
+	}
+
+	void buildParams( params ) {
+		params.filter = '';
+
+		def period = new StringBuffer();
+		def rundate = dtSvc.getServerDate(); 
+		if ( params.period == 'quarterly' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.qtr ) throw new Exception('qtr is required');
+
+			def months = dtSvc.getMonthsByQtr( params.qtr );
+			def monthindex = months[0].index;
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			params.startdate = params.year +'-'+ strmonth +'-01'; 
+			params.enddate = dtSvc.getQtrEndDate( params.qtr, params.year ); 
+			period.append( months[0].caption +' - '+ months[-1].caption +' '+ params.year ); 
+
+		} else if ( params.period == 'asofqtr' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.qtr ) throw new Exception('qtr is required');
+
+			def months = dtSvc.getMonths(); 
+			period.append( months[0].caption );
+			params.startdate = params.year +'-01-01'; 
+			params.enddate = dtSvc.getQtrEndDate( params.qtr, params.year ); 
+
+			months = dtSvc.getMonthsByQtr( params.qtr );
+			period.append(' - '+ months[-1].caption +' '+ params.year ); 
+
+		} else if ( params.period == 'monthly' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.month ) throw new Exception('month is required');
+
+			def monthindex = params.month.index; 
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			def dtstart = java.sql.Date.valueOf(''+ params.year +'-'+ strmonth +'-01'); 
+			def dtend = dtSvc.getMonthEndDate( dtstart ); 
+			def months = dtSvc.getMonths(); 
+			params.startdate = dtstart;
+			params.enddate = dtend;
+			period.append( months[monthindex-1].caption +' '+ params.year ); 
+		
+		} else if ( params.period == 'asofmonth' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.month ) throw new Exception('month is required');
+
+			def monthindex = params.month.index; 
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			def dtstart = java.sql.Date.valueOf(''+ params.year +'-01-01'); 
+			def dtend = java.sql.Date.valueOf(''+ params.year +'-'+ strmonth +'-01');
+			dtend = dtSvc.getMonthEndDate( dtend ); 
+
+			def months = dtSvc.getMonths(); 
+			params.startdate = dtstart;
+			params.enddate = dtend;
+			if ( months[0].index != months[monthindex-1].index ) { 
+				period.append( months[0].caption ).append(' - '); 
+			} 
+			period.append( months[monthindex-1].caption ).append(' '+ params.year); 
+		
+		} else {
+			if ( !params.date ) throw new Exception('date is required');
+
+			def syear = params.date.toString().split('-')[0]; 
+			if ( params.period == 'asofday' ) {
+				period.append("As of "); 	
+				params.startdate = syear +'-01-01'; 
+			} else {
+				params.startdate = params.date;
+			}
+
+			params.enddate = params.date; 
+			params.year = syear; 
+
+			def formatter = new java.text.SimpleDateFormat('MMMMM dd, yyyy');
+			if ( params.date instanceof java.util.Date ) {
+				period.append(formatter.format( params.date ));
+			} else {
+				period.append(formatter.format( java.sql.Date.valueOf( params.date ) )); 
+			} 
+		}
+		params.strperiod = period.toString(); 
+		
+	} 
+	
+}
