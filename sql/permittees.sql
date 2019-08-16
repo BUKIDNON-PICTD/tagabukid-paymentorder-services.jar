@@ -119,7 +119,10 @@ WHERE permitteename like $P{searchtext}
 SELECT * FROM permittee WHERE entobjid = $P{objid}
 
 [getPermitteePayorder]
-SELECT * FROM payorder WHERE permobjid = $P{permobjid}
+SELECT * FROM payorder p  
+INNER JOIN permittee_commodity1 pc ON p.permobjid = pc.permobjid AND CURDATE() BETWEEN pc.startdate AND pc.enddate
+WHERE p.receiptdate BETWEEN pc.startdate AND pc.enddate
+AND p.permobjid = $P{permobjid}
 
 [getReportByPermittee]
 SELECT p.permitteename, p.location, c.commodityname, ski.unittype, SUM(poi.sgquantity) AS totquantity, po.receiptdate 

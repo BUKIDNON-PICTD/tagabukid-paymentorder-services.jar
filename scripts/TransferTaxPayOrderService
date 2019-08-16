@@ -1,0 +1,177 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class TransferTaxPayOrderService extends ActiveCrudListService
+{
+	@ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em;
+
+	@ActiveDB('bukpayorder')
+	def xem;
+
+	@ActiveDB(value='bukpayorder',em='main')
+	def emmain 
+
+	@Service('SequenceService')
+	def seqSvc
+
+	@Service('ReportParameterService')
+	def rpsvc
+
+	@Service('DateService')
+	def dtSvc
+
+	@Service('BUKPermitteeCRUDService')
+	def bukpermsvc
+
+	@Service('BUKPayOrderService')
+	def poSvc 
+
+	@Env
+	def env; 
+
+
+
+	// =========   Transfer Tax Assessment Support  =========================
+	@ProxyMethod
+	public def generateAssessment(entity){
+		entity.objid = 'PO' + new java.rmi.server.UID()
+		entity.office = "ASSESSOR"
+		println entity
+
+		return createPaymentOrder(entity)
+	}
+
+
+	def createPaymentOrder(entity){
+		def paymentorderitems = []
+
+		def ttpenalty = entity.taxdue * 0.04 * (entity.nummonth/12)
+
+		def ttsurcharge
+		if (entity.ifsurcharge){
+			 ttsurcharge = entity.taxdue * 0.25
+		}else{
+			 ttsurcharge = 0
+		}
+
+		// def maxmonth
+		// if (nummonth >= 36){
+		// 	maxmonth = 36
+		// }else{
+		// 	maxmonth = nummonth
+		// } 
+
+		def ttinterest = (entity.taxdue + ttpenalty + ttsurcharge) * (entity.nummonth >= 36 ? 36 : entity.nummonth) * 0.02
+
+		def totalamountdue = ttsurcharge + ttpenalty + ttinterest
+
+		println ttpenalty
+		println ttsurcharge
+		println ttinterest
+		println totalamountdue
+
+		def items = [
+                [amount : ttpenalty, description: 'transfertaxpaymentorderpenalty'],
+                [amount : ttsurcharge, description: 'transfertaxpaymentordersurcharge'],
+                [amount : ttinterest, description: 'transfertaxpaymentorderinterest'],
+            ]
+        println items
+
+		items.each{
+   			def itemaccount = emmain.getTransferTaxItemAccounts([description:it.description])[0]
+   			//println "xxxx"
+			def paymentorderitem = [
+				objid: 'PI' + new java.rmi.server.UID(),
+				payorderid : entity.objid,
+				item_objid : itemaccount.objid,
+				item_title : itemaccount.title,
+				item_code : itemaccount.code,
+				type : itemaccount.type,
+				valuetype : itemaccount.valuetype,
+				defaultvalue : itemaccount.defaultvalue,
+				item_fund_objid : itemaccount.fund.objid,
+				item_fund_title : itemaccount.fund.title,
+				item_fund_code : itemaccount.fund.code,
+				amount : toDecimal(it.amount),
+				remarks: null,
+				sgquantity : null,
+				couponno : null,
+			]
+			paymentorderitems.push(paymentorderitem)
+
+	
+		}
+				
+			
+		
+		
+		//println paymentorderitems
+		def paymentorder = [
+			objid : entity.objid,
+			ordernum : null,
+			permobjid : null,
+			paidby : entity.paidby,
+			paidbyaddress : entity.paidbyaddress,
+			amountdue : paymentorderitems.amount.sum(),
+			items : paymentorderitems,
+			office: entity.office,
+			state : 'DRAFT',
+			ordertype : 'TT'
+
+		]
+
+
+		return paymentorder
+
+		//println paymentorder
+	}
+
+
+
+
+	def getTransferTaxItemAccounts(entity){
+		//def filter = "('" + items.objid.join("','") + "')"
+		return em.getTransferTaxItemAccounts(entity);
+	}
+
+
+	@ProxyMethod
+	public def submitAssessmentForPayment(entity){
+	
+		entity.objid = 'PO' + new java.rmi.server.UID()
+
+		//def paymentorders = []
+		
+		def payorder = createPaymentOrder(entity)
+		
+		poSvc.save(payorder)
+
+		println payorder
+
+		payorder.taxorderitems = em.getTransferTaxPayorderitems(payorder)
+
+		return payorder;
+	
+	}
+
+
+	def toDecimal(paramvalue){
+		if (paramvalue == null) 
+			return 0.0
+
+		try{
+			return new java.math.BigDecimal(paramvalue.toString())
+		}
+		catch(e){
+			return 0.0 
+		}
+	}
+
+	def saveTransaction(payorder){
+		return null;
+	}
+
+
+}

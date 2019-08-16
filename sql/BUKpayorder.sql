@@ -125,3 +125,11 @@ SELECT nextSeries AS currentSeries FROM sys_sequence WHERE objid = $P{objid}
 [getValidReceiptno]
 SELECT m.receiptno FROM etracs254_bukidnonns.cashreceipt m
 WHERE receiptno = $P{receiptno}
+
+[getTransferTaxItemAccounts]
+select * from itemaccount where description = $P{description} 
+
+[getTransferTaxPayorderitems]
+select poi.item_title, poi.amount from simple_payment_order3.payorder po
+inner join simple_payment_order3.payorderitem poi on poi.payorderid = po.objid
+where poi.payorderid = $P{objid}

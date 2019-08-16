@@ -1,0 +1,226 @@
+import com.rameses.annotations.*
+import com.rameses.common.*
+import com.rameses.services.extended.*;
+
+class ReportPermitteeCumulativeQuantityService 
+{
+	@ActiveDB(value='cumulativequantity', em='plugtreasury')
+    def em
+
+	@Service("PersistenceService")
+    def persistenceSvc;
+
+	@Service('DateService')
+	def dtSvc 
+
+	@Service('TagabukidLookupService')
+    def tgbkdSvc
+
+	@Service('NumberService')
+	def numSvc
+
+	@Service('RPTUtil')
+	def util
+
+	@Env
+	def env;
+
+	@ProxyMethod
+	public def getPermitteeCumulativeQuantity(o){
+		def data = [:]
+	    println o
+		def qty = em.getPermitteeCumulativeQuantity([objid:o.objid])
+		println qty
+		data.reportdata = qty;
+		data.parameters = [
+			LGUNAME  :"PG-BUKIDNON, REGION 10",
+			LGUADDRESS : "Provincial Capitol, City of Malaybalay",
+			TITLE :"JOB ORDER APPOINTMENT",
+		]
+		return data
+		println data
+
+	}
+
+	
+
+
+	def buildTitle(params) {
+		if (params.period == 'quarterly') return 'Quarterly'
+        if (params.period == 'monthly') return 'Monthly'
+        if (params.period == 'daily') return 'Daily'
+        if (params.period == 'asofqtr') return 'Quarterly'
+        if (params.period == 'asofmonth') return 'Monthly'
+        if (params.period == 'asofday') return 'Daily'
+	}
+
+	@ProxyMethod
+	public List getNumDays( year, month ) {
+		if ( !month && month < 0 ) return []
+		
+		Calendar cal = Calendar.getInstance()
+        cal.set( year, month, 1)
+        int maxday = cal.getActualMaximum(cal.DAY_OF_MONTH)
+		def numdays = []
+		1.upto( maxday ) { numdays.add( it ) }
+		return numdays 
+	}
+
+	@ProxyMethod
+	public List getDocumentStates() {
+		return [
+		[name:'idle', title:'IDLE'],
+		[name:'enroute', title:'ENROUTE'],
+		[name:'received', title:'RECEIVED'],
+		[name:'processing', title:'PROCESSING'],
+		[name:'sent', title:'SENT'],
+		[name:'closed', title:'CLOSED'],
+		[name:'archive', title:'ARCHIVE'],
+		[name:'attached', title:'ATTACHED'],
+		[name:'archived', title:'ARCHIVED'],
+		[name:'offline', title:'OFFLINE'],
+		[name:'outgoing', title:'OUTGOING'],
+		[name:'redflag', title:'REDFLAG'],
+		[name:'linked', title:'LINKED']
+		];
+	
+	}
+
+	@ProxyMethod
+	public Boolean getReportPermission() {
+		return userRoleSvc.getUsers( [domain:'SUBAY', roles:'MASTER'] ).collect {it.objid}.contains(env.USERID)
+	
+	}
+
+	void buildParams( params ) {
+		params.filter = '';
+		params.period = '';
+		if(!params.asof){
+			if(!params.month ){
+				params.period = 'quarterly'
+			}else if(!params.day){
+				params.period = 'monthly'
+			}else{
+				params.period = 'daily'
+				params.date = params.year +'-'+ params.month.index + '-' + params.day;
+			}
+		}else{
+			if(!params.month ){
+				params.period = 'asofqtr'
+			}else if(!params.day){
+				params.period = 'asofmonth'
+			}else{
+				params.period = 'asofday'
+				params.date = params.year +'-'+ params.month.index + '-' + params.day;
+			}
+		}
+
+		def period = new StringBuffer();
+		def rundate = dtSvc.getServerDate(); 
+		if ( params.period == 'quarterly' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.qtr ) throw new Exception('qtr is required');
+
+			def months = dtSvc.getMonthsByQtr( params.qtr );
+			def monthindex = months[0].index;
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			params.startdate = params.year +'-'+ strmonth +'-01'; 
+			params.enddate = dtSvc.getQtrEndDate( params.qtr, params.year ); 
+			period.append( months[0].caption +' - '+ months[-1].caption +' '+ params.year ); 
+
+		} else if ( params.period == 'asofqtr' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.qtr ) throw new Exception('qtr is required');
+
+			def months = dtSvc.getMonths(); 
+			period.append( months[0].caption );
+			params.startdate = params.year +'-01-01'; 
+			params.enddate = dtSvc.getQtrEndDate( params.qtr, params.year ); 
+
+			months = dtSvc.getMonthsByQtr( params.qtr );
+			period.append(' - '+ months[-1].caption +' '+ params.year ); 
+
+		} else if ( params.period == 'monthly' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.month ) throw new Exception('month is required');
+
+			def monthindex = params.month.index; 
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			def dtstart = java.sql.Date.valueOf(''+ params.year +'-'+ strmonth +'-01'); 
+			def dtend = dtSvc.getMonthEndDate( dtstart ); 
+			def months = dtSvc.getMonths(); 
+			params.startdate = dtstart;
+			params.enddate = dtend;
+			period.append( months[monthindex-1].caption +' '+ params.year ); 
+		
+		} else if ( params.period == 'asofmonth' ) {
+			if ( !params.year ) throw new Exception('year is required');
+			if ( !params.month ) throw new Exception('month is required');
+
+			def monthindex = params.month.index; 
+			def strmonth = (monthindex > 9? monthindex: '0'+monthindex); 
+			def dtstart = java.sql.Date.valueOf(''+ params.year +'-01-01'); 
+			def dtend = java.sql.Date.valueOf(''+ params.year +'-'+ strmonth +'-01');
+			dtend = dtSvc.getMonthEndDate( dtend ); 
+
+			def months = dtSvc.getMonths(); 
+			params.startdate = dtstart;
+			params.enddate = dtend;
+			if ( months[0].index != months[monthindex-1].index ) { 
+				period.append( months[0].caption ).append(' - '); 
+			} 
+			period.append( months[monthindex-1].caption ).append(' '+ params.year); 
+		
+		} else {
+			if ( !params.date ) throw new Exception('date is required');
+
+			def syear = params.date.toString().split('-')[0]; 
+			if ( params.period == 'asofday' ) {
+				period.append("As of "); 	
+				params.startdate = syear +'-01-01'; 
+			} else {
+				params.startdate = params.date;
+			}
+
+			params.enddate = params.date; 
+			params.year = syear; 
+
+			def formatter = new java.text.SimpleDateFormat('MMMMM dd, yyyy');
+			if ( params.date instanceof java.util.Date ) {
+				period.append(formatter.format( params.date ));
+			} else {
+				period.append(formatter.format( java.sql.Date.valueOf( params.date ) )); 
+			} 
+		}
+		params.strperiod = period.toString(); 
+		
+	}
+
+
+	def toInteger(paramvalue){
+		if (paramvalue == null) 
+			return 0
+
+		try{
+			return 
+			new java.math.BigDecimal(paramvalue.toString()).intValue()
+		}
+		catch(e){
+			return 0
+		}
+	}
+
+	def toDecimal(paramvalue){
+		if (paramvalue == null) 
+			return 0.0
+
+		try{
+			return new java.math.BigDecimal(paramvalue.toString())
+		}
+		catch(e){
+			return 0.0 
+		}
+	}
+
+
+}
