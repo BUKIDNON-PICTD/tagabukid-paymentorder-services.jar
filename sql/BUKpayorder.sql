@@ -133,3 +133,6 @@ select * from itemaccount where description = $P{description}
 select poi.item_title, poi.amount from simple_payment_order3.payorder po
 inner join simple_payment_order3.payorderitem poi on poi.payorderid = po.objid
 where poi.payorderid = $P{objid}
+
+[getMonthDiff]
+select timestampdiff(month,  $P{lastdatepaid}, CURDATE());
