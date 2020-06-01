@@ -124,17 +124,17 @@ where receiptno = $P{receiptno}
 SELECT nextSeries AS currentSeries FROM sys_sequence WHERE objid = $P{objid} 
 
 [getValidReceiptno]
-SELECT m.series FROM etracs254_bukidnon.cashreceipt m
+SELECT m.series FROM cashreceipt m
 WHERE m.series = $P{receiptno}
 
 [findReceiptUsername]
-SELECT user_name FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
+SELECT user_name FROM cashreceipt where series = $P{receiptno}
 
 [findReceiptID]
-SELECT objid FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
+SELECT objid FROM cashreceipt where series = $P{receiptno}
 
 [findReceiptDate]
-SELECT receiptdate FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
+SELECT receiptdate FROM cashreceipt where series = $P{receiptno}
 
 [getTransferTaxItemAccounts]
 select * from itemaccount where description = $P{description} 
