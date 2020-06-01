@@ -27,7 +27,7 @@ AND p.permitteename LIKE $P{searchtext}
 
 
 [getList]
-SELECT p.*, pc.objid as permitobjid, pc.* 
+SELECT p.*, pc.objid as permitobjid, pc.permitno, pc.status, pc.startdate, pc.enddate, pc.eccallowed
 FROM permittee p
 INNER JOIN permittee_commodity1 pc ON pc.permobjid = p.objid
 WHERE pc.startdate = (SELECT MAX(startdate) FROM permittee_commodity1 WHERE permobjid = p.objid)

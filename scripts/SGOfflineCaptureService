@@ -1,0 +1,270 @@
+import com.rameses.annotations.*;
+import com.rameses.common.*;
+import com.rameses.services.extended.*;
+
+public class SGOfflineCaptureService extends ActiveCrudListService
+{
+    @ActiveDB(value='bukpayorder', em='plugtreasury')
+	def em;
+
+    @ActiveDB('bukpayorder')
+	def xem;
+
+	@ActiveDB(value='bukpayorder',em='main')
+	def emmain 
+
+	@Service('SequenceService')
+	def seqSvc
+
+	@Service('ReportParameterService')
+	def rpsvc
+
+	@Service('DateService')
+	def dtSvc
+
+	@Service('BUKPermitteeCRUDService')
+	def bukpermsvc
+
+    @Service('BUKPayOrderService')
+	def poSvc 
+
+
+	@Env
+	def env; 
+
+	@Service("NumberService")
+	def numSvc;
+
+	@ProxyMethod
+	public def init(){
+		def entity = [:];
+		entity.state = "CLOSED"
+		entity.txndate = entity.receiptdate
+		entity.expdate = entity.receiptdate
+		//entity.ordernum = dtSvc.getServerYear() +"-"+ "OFF" + seqSvc.getNextSeries('payorderoffline' + dtSvc.getServerYear()) ;
+		entity.assessedby = env.USERID
+		entity.assessedbyname = env.FULLNAME
+		//entity.ordertype='MISC'
+		entity.items = []
+		return entity;
+	}
+
+    // public def getCurrentSeries( objid )  {
+	// 	def seq = emsequence.findCurrentSeries([ objid: objid ]); 
+	// 	if ( seq ) {
+	// 		return seq.currentSeries; 
+	// 	} else {
+	// 		seq = seqSvc.create( objid ); 
+	// 		return seq.nextSeries; 
+	// 	} 
+	// }
+
+    void savePayorderitems(payorder){
+		println "yyyyyyyyy"
+		payorder.items.each{			
+			em.save(it, 'item');
+		}
+	}
+
+    // void beforeCreate(entity){
+    //     entity.ordernum = dtSvc.getServerYear() +"-offline-"+ seqSvc.getNextFormattedSeries('sgoffline' + dtSvc.getServerYear()) ;	
+	// }
+
+    // void afterCreate(entity){
+    //     println entity
+	// 	println entity.receiptno.length()
+
+	// 	if (entity.receiptno.length() != 7){
+	// 		throw new Exception ("The Receipt Number must be 7 digits only")
+	// 	}
+
+	// 	def rn = em.getValidReceiptno(entity)
+	// 	if (!rn.receiptno){
+	// 		throw new Exception ("This Receipt Number does not exist in the Main database")
+	// 	}
+
+	// 	savePayorderitems(entity);
+		
+	// }
+
+    def validateBeforeSave(entity){
+
+		return em.getReceiptNo(entity);
+	}
+
+	// void beforeSave(o){
+    //     def x = svc.validateBeforeSave(o);
+    //     if(x) throw new Exception("Receipt Number already exists");
+        
+    //     //def pos = svc.submitAssessmentForPayment(entity);
+    //     //MsgBox.alert("Capture payment completed");
+  
+	// } 
+
+	void dabidbeforeyouSave(o){
+        def x = validateBeforeSave(o);
+        if(x) throw new Exception("Receipt Number already exists");
+        
+        //def pos = svc.submitAssessmentForPayment(entity);
+        //MsgBox.alert("Capture payment completed");
+  
+	}
+
+	// void afterUpdate(entity){
+	// 	savePayorderitems(entity);
+	// }
+
+
+
+    // =========   Sand and Gravel Offline Support  =========================
+	@ProxyMethod
+	public def generateAssessment(entity){
+		entity.objid = 'PO' + new java.rmi.server.UID()
+		//entity.office = "ADMIN"
+	     println entity
+		// println "test" * 50
+		// println entity.items.qty
+
+		if (entity.receiptno.length() != 7){
+			throw new Exception ("The Receipt Number must be 7 digits only")
+		}
+
+		def rn = em.getValidReceiptno(entity)
+		if (!rn.receiptno){
+			throw new Exception ("This Receipt Number does not exist in the Main database")
+		}
+
+		if (dabidbeforeyouSave(entity)) throw new Exception("Receipt Number already exists");
+
+		def balance
+		entity.items.each{
+			balance = (bukpermsvc.permitteeTotalQuantity(entity.permobjid))
+			if (it.qty > balance) throw new Exception ('I see what you did there')
+		}
+
+		//if(entity.items.qty > qtybalance())
+		return createPaymentOrder(entity,null)
+	}
+
+	def qtybalance(entity){
+       return bukpermsvc.permitteeTotalQuantity(entity.permobjid);
+    }
+
+	@ProxyMethod
+	public def submitAssessmentForPayment(entity){
+
+		entity.ordernum = dtSvc.getServerYear() +"-offline-"+ seqSvc.getNextFormattedSeries('sgoffline' + dtSvc.getServerYear()) ;	
+	
+		def count = getPaymentOrderCounts(entity.items);
+		def paymentorders = []
+		count.each{
+			entity.objid = 'PO' + new java.rmi.server.UID()
+			
+			def payorder = createPaymentOrder(entity,it.orseq)
+
+			dabidbeforeyouSave(payorder)
+			
+			
+			em.save(payorder)
+			savePayorderitems(payorder)
+			
+		}
+		
+		return paymentorders;
+	
+	}
+
+	def getPaymentOrderCounts(items){
+		def filter = "('" + items.objid.join("','") + "')"
+		return em.getSGKindAccountorseq([filter:filter]);
+	}
+
+	def createPaymentOrder(entity,orseq){
+        def orid = em.findReceiptID([receiptno: entity.receiptno])
+        def ordate = em.findReceiptDate([receiptno: entity.receiptno])
+        def orname = em.findReceiptUsername([receiptno: entity.receiptno])
+        // println orid.objid
+        // println ordate.receiptdate
+        // println orname.user.name
+		def paymentorderitems = []
+		entity.items.each{sgkind ->
+			def sgkindaccount;
+			if (orseq){
+				sgkind.orseq = orseq
+				sgkindaccount = em.getSGKindAccount(sgkind);
+			}else{
+				sgkindaccount = em.getSGKindAccountAll(sgkind);
+			}
+			
+			if(sgkindaccount){
+					sgkindaccount.each{it ->
+						def itemaccount = xem.getItemAccount(it.item)[0]
+						def paymentorderitem = [
+							objid: 'PI' + new java.rmi.server.UID(),
+							payorderid : entity.objid,
+							item_objid : itemaccount.objid,
+							item_title : itemaccount.title,
+							item_code : itemaccount.code,
+							type : itemaccount.type,
+							valuetype : itemaccount.valuetype,
+							defaultvalue : itemaccount.defaultvalue,
+							item_fund_objid : itemaccount.fund.objid,
+							item_fund_title : itemaccount.fund.title,
+							item_fund_code : itemaccount.fund.code,
+							amount : toDecimal(itemaccount.defaultvalue) * toDecimal(sgkind.qty),
+							remarks: (it.hascoupon == 1? "qty@" + sgkind.qty + " " + "DR#" + " " + sgkind.couponno:0),
+							sgquantity : sgkind.qty,
+							couponno : (it.hascoupon == 1?sgkind.couponno:0),
+						]
+						paymentorderitems.push(paymentorderitem)
+
+				
+					}
+				
+			}
+		}
+		
+		//println paymentorderitems
+		def paymentorder = [
+			objid : entity.objid,
+			ordernum : entity.ordernum,
+			permobjid : entity.permobjid,
+			paidby : entity.paidby,
+			paidbyaddress : entity.paidbyaddress,
+			amountdue : numSvc.round( paymentorderitems.amount.sum() ),
+			items : paymentorderitems,
+			office: entity.office,
+			state : 'CLOSED',
+            username : orname.user.name,
+            receiptid : orid.objid,
+            receiptno : entity.receiptno,
+            receiptdate : ordate.receiptdate,
+            txndate : ordate.receiptdate,
+            expdate : ordate.receiptdate,
+            assessedby : env.USERID,
+            assessedbyname : env.FULLNAME,
+			ordertype : 'SG'
+
+		]
+
+
+		return paymentorder
+	}
+
+	def toDecimal(paramvalue){
+		if (paramvalue == null) 
+			return 0.0
+
+		try{
+			return new java.math.BigDecimal(paramvalue.toString())
+		}
+		catch(e){
+			return 0.0 
+		}
+	}
+
+	def saveTransaction(payorder){
+		return null;
+	}
+
+}

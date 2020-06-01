@@ -9,6 +9,7 @@ or amountdue like $P{searchtext}
 or receiptno like $P{searchtext}
 or txndate like $P{searchtext})
 and objid NOT IN (SELECT objid FROM payorder WHERE expdate < NOW() AND state = 'DRAFT')
+ORDER BY txndate DESC
 
 [getAccounts]
 select * 
@@ -74,15 +75,15 @@ sgk.unit,
 pt.sgquantity AS newquantity,
 pt.defaultvalue,
 sgk.txntype
-FROM simple_payment_order3.payorder p
-INNER JOIN simple_payment_order3.payorderitem pt ON p.objid = pt.payorderid 
-INNER JOIN simple_payment_order3.sgkind_itemaccount sgk ON sgk.item_objid = pt.item_objid
+FROM simple_payment_order.payorder p
+INNER JOIN simple_payment_order.payorderitem pt ON p.objid = pt.payorderid 
+INNER JOIN simple_payment_order.sgkind_itemaccount sgk ON sgk.item_objid = pt.item_objid
 WHERE pt.payorderid = $P{objid}) xx
 
 [getOrePayorderitemsx]
 SELECT poi.sgquantity, poi.item_title, poi.defaultvalue, poi.amount
-FROM simple_payment_order3.payorder po
-INNER JOIN simple_payment_order3.payorderitem poi ON poi.payorderid = po.objid
+FROM simple_payment_order.payorder po
+INNER JOIN simple_payment_order.payorderitem poi ON poi.payorderid = po.objid
 WHERE poi.payorderid = $P{objid}
 
 [getSGKindAccount]
@@ -123,13 +124,25 @@ where receiptno = $P{receiptno}
 SELECT nextSeries AS currentSeries FROM sys_sequence WHERE objid = $P{objid} 
 
 [getValidReceiptno]
-SELECT m.receiptno FROM etracs254_bukidnonns.cashreceipt m
-WHERE receiptno = $P{receiptno}
+SELECT m.series FROM etracs254_bukidnon.cashreceipt m
+WHERE m.series = $P{receiptno}
+
+[findReceiptUsername]
+SELECT user_name FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
+
+[findReceiptID]
+SELECT objid FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
+
+[findReceiptDate]
+SELECT receiptdate FROM etracs254_bukidnon.cashreceipt where series = $P{receiptno}
 
 [getTransferTaxItemAccounts]
 select * from itemaccount where description = $P{description} 
 
 [getTransferTaxPayorderitems]
-select poi.item_title, poi.amount from simple_payment_order3.payorder po
-inner join simple_payment_order3.payorderitem poi on poi.payorderid = po.objid
+select poi.item_title, poi.amount from simple_payment_order.payorder po
+inner join simple_payment_order.payorderitem poi on poi.payorderid = po.objid
 where poi.payorderid = $P{objid}
+
+[getMonthDiff]
+select timestampdiff(month,  $P{lastdatepaid}, CURDATE());
