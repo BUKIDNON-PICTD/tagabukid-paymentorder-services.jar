@@ -47,11 +47,16 @@ public class TransferTaxPayOrderService extends ActiveCrudListService
 	def createPaymentOrder(entity){
 		def paymentorderitems = []
 
-		def ttpenalty = entity.taxdue * 0.04 * (entity.nummonth/12)
+		//def numberofmonths = em.getMonthDiff([lastdatepaid: entity.lastdatepaid])
+
+		def taxdue = entity.amountconsidered * 0.005
+
+		def ttpenalty = taxdue * 0.04 * (entity.nummonth.intdiv(12))
+		//def ttpenalty = entity.taxdue * 0.04 * (numberofmonths/12)
 
 		def ttsurcharge
 		if (entity.ifsurcharge){
-			 ttsurcharge = entity.taxdue * 0.25
+			 ttsurcharge = taxdue * 0.25
 		}else{
 			 ttsurcharge = 0
 		}
@@ -63,7 +68,9 @@ public class TransferTaxPayOrderService extends ActiveCrudListService
 		// 	maxmonth = nummonth
 		// } 
 
-		def ttinterest = (entity.taxdue + ttpenalty + ttsurcharge) * (entity.nummonth >= 36 ? 36 : entity.nummonth) * 0.02
+		def ttinterest = (taxdue + ttpenalty + ttsurcharge) * (entity.nummonth >= 36 ? 36 : entity.nummonth) * 0.02
+		//def ttinterest = (entity.taxdue + ttpenalty + ttsurcharge) * (numberofmonths >= 36 ? 36 : numberofmonths) * 0.02
+		
 
 		def totalamountdue = ttsurcharge + ttpenalty + ttinterest
 
@@ -118,7 +125,10 @@ public class TransferTaxPayOrderService extends ActiveCrudListService
 			items : paymentorderitems,
 			office: entity.office,
 			state : 'DRAFT',
-			ordertype : 'TT'
+			ordertype : 'TT',
+			amountconsidered : entity.amountconsidered,
+			nummonth : entity.nummonth,
+			taxdue : taxdue
 
 		]
 
